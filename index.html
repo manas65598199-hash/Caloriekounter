@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Calorie Tracker</title>
+  
+  <!-- Tailwind CSS (for styling) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js (for reactive state management) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-orange-50 min-h-screen p-4 md:p-8 font-sans">
+
+  <div class="max-w-2xl mx-auto space-y-6" x-data="calorieApp()">
+    
+    <!-- Top Header & Calorie Counter -->
+    <header class="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-bold text-gray-800">🍛 Indian Calorie Tracker</h1>
+        <p class="text-xs text-gray-500">Track Rotis, Dals, and Home Meals</p>
+      </div>
+      <div class="bg-orange-100 text-orange-800 px-4 py-2 rounded-xl text-center">
+        <p class="text-[10px] uppercase font-bold text-orange-600">Daily Progress</p>
+        <p class="text-lg font-extrabold" x-text="totalCalories() + ' / ' + targetCalories + ' kcal'"></p>
+      </div>
+    </header>
+
+    <!-- 1. Body Profile & Target Calorie Calculator -->
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+      <h2 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+        <span>⚖️</span> Body Profile & Target Calculator
+      </h2>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Weight (kg)</label>
+          <input type="number" x-model.number="profile.weight" @input="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none focus:border-orange-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Height (cm)</label>
+          <input type="number" x-model.number="profile.height" @input="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none focus:border-orange-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Age</label>
+          <input type="number" x-model.number="profile.age" @input="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none focus:border-orange-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Gender</label>
+          <select x-model="profile.gender" @change="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none bg-white">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Activity Level</label>
+          <select x-model="profile.activity" @change="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none bg-white">
+            <option value="1.2">Sedentary (Office/Low Activity)</option>
+            <option value="1.375">Lightly Active (1-3 days workout)</option>
+            <option value="1.55">Moderately Active (3-5 days workout)</option>
+            <option value="1.725">Very Active (6-7 days workout)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-500">Goal</label>
+          <select x-model="profile.goal" @change="calculateTarget()" class="w-full mt-1 p-2 text-xs border rounded-lg outline-none bg-white">
+            <option value="-500">Weight Loss (-500 kcal)</option>
+            <option value="0">Maintain Weight</option>
+            <option value="400">Weight Gain (+400 kcal)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Target Display Summary -->
+      <div class="bg-orange-50 p-3 rounded-xl flex justify-around text-center text-xs border border-orange-100">
+        <div>
+          <p class="text-gray-500 font-semibold text-[10px]">TARGET CALORIES</p>
+          <p class="font-bold text-orange-600 text-sm" x-text="targetCalories + ' kcal'"></p>
+        </div>
+        <div>
+          <p class="text-gray-500 font-semibold text-[10px]">REMAINING</p>
+          <p class="font-bold text-sm" :class="remainingCalories() < 0 ? 'text-red-500' : 'text-green-600'" x-text="remainingCalories() + ' kcal'"></p>
+        </div>
+        <div>
+          <p class="text-gray-500 font-semibold text-[10px]">TARGET PROTEIN</p>
+          <p class="font-bold text-amber-600 text-sm" x-text="targetProtein + ' g'"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. OpenAI API Key Input -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-2">
+      <label class="block text-xs font-semibold text-gray-600">OpenAI API Key (Required for AI Photo Scan)</label>
+      <input 
+        type="password" 
+        x-model="apiKey" 
+        placeholder="Paste your sk-... key here"
+        class="w-full p-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-orange-500"
+      >
+      <p class="text-[10px] text-gray-400">Your API key is only stored inside your browser memory.</p>
+    </div>
+
+    <!-- 3. AI Photo Upload Box -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 text-center space-y-3">
+      <label class="block border-2 border-dashed border-orange-200 rounded-xl p-6 bg-orange-50/50 hover:bg-orange-50 cursor-pointer transition">
+        <div class="text-3xl mb-1">📸</div>
+        <span class="text-sm font-bold text-gray-700" x-text="loading ? 'Analyzing Indian Meal...' : 'Upload Food Photo'"></span>
+        <p class="text-xs text-gray-400 mt-1">Identifies Roti, Sabzi, Dal, Poha, Dosa, etc.</p>
+        <input type="file" accept="image/*" @change="uploadImage($event)" class="hidden" :disabled="loading">
+      </label>
+    </div>
+
+    <!-- 4. Manual Food Input -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
+      <h3 class="text-sm font-bold text-gray-700">Add Item Manually</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <input type="text" x-model="manual.name" placeholder="Item Name (e.g., 2 Rotis)" class="p-2 text-xs border rounded-lg outline-none">
+        <input type="number" x-model="manual.calories" placeholder="Calories (kcal)" class="p-2 text-xs border rounded-lg outline-none">
+      </div>
+      <button @click="addManual()" class="w-full py-2 bg-gray-800 text-white text-xs font-bold rounded-lg hover:bg-gray-900">
+        Add Meal
+      </button>
+    </div>
+
+    <!-- 5. Daily Meal Logs List -->
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+      <h3 class="font-bold text-gray-800 text-sm">Today's Meals Log</h3>
+      
+      <template x-if="logs.length === 0">
+        <p class="text-xs text-gray-400 text-center py-4">No food items added yet.</p>
+      </template>
+
+      <div class="divide-y divide-gray-100">
+        <template x-for="(item, index) in logs" :key="index">
+          <div class="py-3 flex justify-between items-center text-xs">
+            <div>
+              <p class="font-bold text-gray-800" x-text="item.foodName"></p>
+              <p class="text-gray-400" x-text="item.portion"></p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold text-orange-600" x-text="item.calories + ' kcal'"></span>
+              <button @click="deleteLog(index)" class="text-red-400 hover:text-red-600 font-bold">✕</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- App Script -->
+  <script>
+    function calorieApp() {
+      return {
+        apiKey: '',
+        loading: false,
+        logs: [],
+        manual: { name: '', calories: '' },
+
+        // Body Profile Defaults
+        profile: {
+          weight: 70,
+          height: 170,
+          age: 25,
+          gender: 'male',
+          activity: '1.375',
+          goal: '-500'
+        },
+
+        targetCalories: 1800,
+        targetProtein: 90,
+
+        init() {
+          this.calculateTarget();
+        },
+
+        // Mifflin-St Jeor Calculation Formula
+        calculateTarget() {
+          if (!this.profile.weight || !this.profile.height || !this.profile.age) return;
+
+          let bmr = (10 * this.profile.weight) + (6.25 * this.profile.height) - (5 * this.profile.age);
+          bmr = this.profile.gender === 'male' ? bmr + 5 : bmr - 161;
+
+          const tdee = bmr * parseFloat(this.profile.activity);
+          this.targetCalories = Math.round(tdee + parseInt(this.profile.goal));
+          
+          // Estimated protein recommendation (20% of total calories)
+          this.targetProtein = Math.round((this.targetCalories * 0.20) / 4);
+        },
+
+        totalCalories() {
+          return this.logs.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+        },
+
+        remainingCalories() {
+          return this.targetCalories - this.totalCalories();
+        },
+
+        addManual() {
+          if (!this.manual.name || !this.manual.calories) return;
+          this.logs.push({
+            foodName: this.manual.name,
+            portion: 'Manual Entry',
+            calories: Number(this.manual.calories)
+          });
+          this.manual.name = '';
+          this.manual.calories = '';
+        },
+
+        deleteLog(index) {
+          this.logs.splice(index, 1);
+        },
+
+        async uploadImage(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          if (!this.apiKey) {
+            alert('Please enter your OpenAI API key in the field above.');
+            return;
+          }
+
+          this.loading = true;
+
+          try {
+            const base64Image = await this.toBase64(file);
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Identify this Indian food item, estimate portion size in standard Indian household terms (e.g., 2 Rotis, 1 Katori Dal), and estimate calories. Return ONLY a raw JSON object: {"foodName": "...", "portion": "...", "calories": 0}'
+                      },
+                      {
+                        type: 'image_url',
+                        image_url: { url: base64Image }
+                      }
+                    ]
+                  }
+                ],
+                max_tokens: 200
+              })
+            });
+
+            const data = await response.json();
+            
+            if (data.choices && data.choices[0]) {
+              const rawText = data.choices[0].message.content.trim();
+              const parsedData = JSON.parse(rawText.replace(/```json|```/g, ''));
+              this.logs.push(parsedData);
+            } else {
+              alert('Could not recognize image. Make sure your API key is correct.');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Error analyzing image.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        toBase64(file) {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+          });
+        }
+      }
+    }
+  </script>
+</body>
+</html>
+
