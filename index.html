@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Calorie Tracker</title>
+  
+  <!-- Tailwind CSS (for styling) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js (for simple frontend logic) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-orange-50 min-h-screen p-4 md:p-8 font-sans">
+
+  <div class="max-w-2xl mx-auto space-y-6" x-data="calorieApp()">
+    
+    <!-- Top Header -->
+    <header class="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-bold text-gray-800">🍛 Calorie Tracker</h1>
+        <p class="text-xs text-gray-500">Track Rotis, Dals, and Indian Thalis</p>
+      </div>
+      <div class="bg-orange-100 text-orange-800 px-4 py-2 rounded-xl text-center">
+        <p class="text-[10px] uppercase font-bold text-orange-600">Daily Total</p>
+        <p class="text-lg font-extrabold" x-text="totalCalories() + ' kcal'"></p>
+      </div>
+    </header>
+
+    <!-- OpenAI API Key Setup Box -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-2">
+      <label class="block text-xs font-semibold text-gray-600">OpenAI API Key (Required for AI Photo Scan)</label>
+      <input 
+        type="password" 
+        x-model="apiKey" 
+        placeholder="Paste your sk-... key here"
+        class="w-full p-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-orange-500"
+      >
+      <p class="text-[10px] text-gray-400">Your API key is stored safely only inside your browser.</p>
+    </div>
+
+    <!-- AI Photo Upload Box -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 text-center space-y-3">
+      <label class="block border-2 border-dashed border-orange-200 rounded-xl p-6 bg-orange-50/50 hover:bg-orange-50 cursor-pointer transition">
+        <div class="text-3xl mb-1">📸</div>
+        <span class="text-sm font-bold text-gray-700" x-text="loading ? 'Analyzing Indian Meal...' : 'Upload Food Photo'"></span>
+        <p class="text-xs text-gray-400 mt-1">Identifies Roti, Sabzi, Dal, Poha, etc.</p>
+        <input type="file" accept="image/*" @change="uploadImage($event)" class="hidden" :disabled="loading">
+      </label>
+    </div>
+
+    <!-- Manual Food Input Form -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
+      <h3 class="text-sm font-bold text-gray-700">Add Item Manually</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <input type="text" x-model="manual.name" placeholder="Item Name (e.g., 2 Rotis)" class="p-2 text-xs border rounded-lg outline-none">
+        <input type="number" x-model="manual.calories" placeholder="Calories (kcal)" class="p-2 text-xs border rounded-lg outline-none">
+      </div>
+      <button @click="addManual()" class="w-full py-2 bg-gray-800 text-white text-xs font-bold rounded-lg hover:bg-gray-900">
+        Add Meal
+      </button>
+    </div>
+
+    <!-- Daily Meal Logs -->
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+      <h3 class="font-bold text-gray-800 text-sm">Today's Meals Log</h3>
+      
+      <template x-if="logs.length === 0">
+        <p class="text-xs text-gray-400 text-center py-4">No food items added yet.</p>
+      </template>
+
+      <div class="divide-y divide-gray-100">
+        <template x-for="(item, index) in logs" :key="index">
+          <div class="py-3 flex justify-between items-center text-xs">
+            <div>
+              <p class="font-bold text-gray-800" x-text="item.foodName"></p>
+              <p class="text-gray-400" x-text="item.portion"></p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold text-orange-600" x-text="item.calories + ' kcal'"></span>
+              <button @click="deleteLog(index)" class="text-red-400 hover:text-red-600 font-bold">✕</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript App Logic -->
+  <script>
+    function calorieApp() {
+      return {
+        apiKey: '',
+        loading: false,
+        logs: [],
+        manual: { name: '', calories: '' },
+
+        totalCalories() {
+          return this.logs.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+        },
+
+        addManual() {
+          if (!this.manual.name || !this.manual.calories) return;
+          this.logs.push({
+            foodName: this.manual.name,
+            portion: 'Manual Entry',
+            calories: Number(this.manual.calories)
+          });
+          this.manual.name = '';
+          this.manual.calories = '';
+        },
+
+        deleteLog(index) {
+          this.logs.splice(index, 1);
+        },
+
+        async uploadImage(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          if (!this.apiKey) {
+            alert('Please enter your OpenAI API key at the top first.');
+            return;
+          }
+
+          this.loading = true;
+
+          try {
+            // Convert file to Base64 format
+            const base64Image = await this.toBase64(file);
+
+            // Call OpenAI directly from the browser
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Identify this Indian food item, estimate portion size in standard Indian terms (e.g. 2 Rotis, 1 Katori Dal), and estimate calories. Return ONLY a raw JSON object: {"foodName": "...", "portion": "...", "calories": 0}'
+                      },
+                      {
+                        type: 'image_url',
+                        image_url: { url: base64Image }
+                      }
+                    ]
+                  }
+                ],
+                max_tokens: 200
+              })
+            });
+
+            const data = await response.json();
+            
+            if (data.choices && data.choices[0]) {
+              const rawText = data.choices[0].message.content.trim();
+              const parsedData = JSON.parse(rawText.replace(/```json|```/g, ''));
+              this.logs.push(parsedData);
+            } else {
+              alert('Could not process image. Check your API key.');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Failed to analyze image.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        toBase64(file) {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+          });
+        }
+      }
+    }
+  </script>
+</body>
+</html>
